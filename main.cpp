@@ -4,6 +4,8 @@
 #include <list>
 #include <memory>
 
+#include "version.h"
+
 using namespace std;
 
 typedef struct{
