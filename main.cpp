@@ -137,7 +137,7 @@ public:
 
     ~MyList(){
         //cout << "MyList destructor" << endl;
-        allocator_traits<Allocator>::deallocate(alloc, (CNode<T> *) last, Size());
+        allocator_traits<Allocator>::deallocate(alloc, first, Size());
     }
 };
 
@@ -158,9 +158,9 @@ int main() {
 
     cout << endl << "allocator with my_list" << endl;
     MyList<int, PoolAllocator<CNode<int>, 5>> my_list;
+
     for(int i=0; i<10; i++)
         my_list.Add(i);
-
 
     my_list.SetFirst();
     int size = my_list.Size();
