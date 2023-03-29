@@ -8,42 +8,52 @@
 
 using namespace std;
 
-typedef struct{
-    shared_ptr<void> pool;
-    uint32_t used_elements;
-    uint32_t deallocated_elements;
-} pool_data;
+template <class T>
+struct PoolData{
+    shared_ptr<T> pool;
+    int32_t used_elements;
+
+    PoolData() = delete;
+
+    PoolData(unsigned int num_elements) : used_elements(0) {
+        pool.reset(static_cast<T*>(::operator new(num_elements*sizeof(T))));
+    }
+};
 
 template <class T, int num>
 class PoolAllocator{
 private:
-    list<pool_data> pools;
-    std::size_t pool_size;
+    list<PoolData<T>> pools;
+    size_t pool_size;
     T* cur_pointer = nullptr;
 
 public:
     using value_type = T;
     void AllocateNewPool(){
         //cout << "allocate new pool " << endl;
-        pool_data pd{nullptr, 0, 0};
+        PoolData<T> pd(pool_size);
         pools.push_back(pd);
-        pools.back().pool.reset(static_cast<T*>(::operator new(pool_size*sizeof(T))));
         cur_pointer = static_cast<T*>(pools.back().pool.get());
     }
 
     PoolAllocator() noexcept : pool_size(num) {
         //cout << "allocator constructor " << pool_size << endl;
-        AllocateNewPool();
     };
 
     template <class U> PoolAllocator (const PoolAllocator<U, num>&) noexcept {}
 
-    T* allocate (std::size_t n){
-        //cout << "request for " << n << " elements" << endl;
-        if (pools.back().used_elements + n > num) AllocateNewPool();
+    T* allocate (size_t n){
+        try{
+            if (n > pool_size) throw -1;
+        }
+        catch(int e){
+            cout << "allocation error :" << e << endl;
+            return nullptr;
+        }
+        if ((pools.back().used_elements + n > num) || (pools.size() == 0)) AllocateNewPool();
 
         pools.back().used_elements += n;
-        return static_cast<T *>(::operator new(n, cur_pointer + pools.back().used_elements - n));
+        return static_cast<T*>(::operator new(n, cur_pointer + pools.back().used_elements - n));
     }
 
     void deallocate (T* p, std::size_t n) {
@@ -55,16 +65,16 @@ public:
             int num_tmp = n - pools.back().used_elements;
             pools.back().pool.reset();
             pools.pop_back();
-            cur_pointer = static_cast<T *>(pools.back().pool.get());
+            cur_pointer = static_cast<T*>(pools.back().pool.get());
             deallocate(p, num_tmp);
         } else {
-            pools.back().deallocated_elements += n;
-            if (pools.back().used_elements <= pools.back().deallocated_elements) {
+            pools.back().used_elements -= n;
+            if (pools.back().used_elements <= 0) {
                 pools.back().pool.reset();
                 pools.pop_back();
                 //cout << "deallocate " << endl;
                 if (pools.size()) {
-                    cur_pointer = static_cast<T *>(pools.back().pool.get());
+                    cur_pointer = static_cast<T*>(pools.back().pool.get());
                 }
             }
         }
@@ -143,7 +153,7 @@ public:
 
 int main() {
     cout << "allocator with map" << endl;
-    map<int, int, std::less<int>, PoolAllocator<pair<const int, int>, 10>> test_map;
+    map<int, int, less<int>, PoolAllocator<pair<const int, int>, 10>> test_map;
 
     test_map.insert(make_pair(0, 1));
     for (int i = 1; i != 10; i++) {
