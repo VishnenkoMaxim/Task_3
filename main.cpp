@@ -56,25 +56,20 @@ public:
         return static_cast<T*>(::operator new(n, cur_pointer + pools.back().used_elements - n));
     }
 
-    void deallocate (T* p, std::size_t n) {
-        //cout << "deallocate " << n << " elements " << p << endl;
+    void deallocate (T* p, size_t n) {
+        //cout << "deallocate addr:"  << p << endl;
         if (n == 0) return;
 
-        if (n >= pool_size) {
-            //cout << "deallocate all" << endl;
-            int num_tmp = n - pools.back().used_elements;
-            pools.back().pool.reset();
-            pools.pop_back();
-            cur_pointer = static_cast<T*>(pools.back().pool.get());
-            deallocate(p, num_tmp);
-        } else {
-            pools.back().used_elements -= n;
-            if (pools.back().used_elements <= 0) {
-                pools.back().pool.reset();
-                pools.pop_back();
-                //cout << "deallocate " << endl;
-                if (pools.size()) {
-                    cur_pointer = static_cast<T*>(pools.back().pool.get());
+        for(auto it=pools.begin(); it != pools.end(); it++){
+            if (it->pool.get() <= p && it->pool.get()+pool_size > p) {
+                it->used_elements -= n;
+                if (it->used_elements == 0) {
+                    it->pool.reset();
+                    pools.erase(it);
+                    if (pools.size()) {
+                        cur_pointer = static_cast<T*>(pools.back().pool.get());
+                    }
+                    break;
                 }
             }
         }
@@ -146,8 +141,12 @@ public:
     }
 
     ~MyList(){
-        //cout << "MyList destructor" << endl;
-        allocator_traits<Allocator>::deallocate(alloc, first, Size());
+        SetFirst();
+        while(current != nullptr){
+            auto tmp_ptr = current;
+            Next();
+            allocator_traits<Allocator>::deallocate(alloc, tmp_ptr, 1);
+        }
     }
 };
 
