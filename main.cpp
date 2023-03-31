@@ -43,22 +43,16 @@ public:
     template <class U> PoolAllocator (const PoolAllocator<U, num>&) noexcept {}
 
     T* allocate (size_t n){
-        try{
-            if (n > pool_size) throw -1;
-        }
-        catch(int e){
-            cout << "allocation error :" << e << endl;
-            return nullptr;
-        }
-        if ((pools.back().used_elements + n > num) || (pools.size() == 0)) AllocateNewPool();
+        if (n > pool_size) throw bad_alloc();
+        if ((pools.size() == 0) || (pools.back().used_elements + n > num)) AllocateNewPool();
 
         pools.back().used_elements += n;
         return static_cast<T*>(::operator new(n, cur_pointer + pools.back().used_elements - n));
     }
 
     void deallocate (T* p, size_t n) {
-        //cout << "deallocate addr:"  << p << endl;
         if (n == 0) return;
+        if (p == nullptr) return;
 
         for(auto it=pools.begin(); it != pools.end(); it++){
             if (it->pool.get() <= p && it->pool.get()+pool_size > p) {
@@ -93,9 +87,13 @@ public:
     CNode<T>* next;
     CNode() : data(0), next(nullptr) {};
     CNode(const T& value) : data(value), next(nullptr) {};
+
+    ~CNode(){
+        //cout << "CNode destructor" << endl;
+    }
 };
 
-template <class T, class Allocator = allocator<T>>
+template <class T, class Allocator = allocator<CNode<T>>>
 class MyList{
 private:
     CNode<T>* first;
@@ -108,7 +106,7 @@ public:
     MyList() : first(nullptr), last(nullptr), current(nullptr), size(0){};
 
     void Add(const T& value){
-        CNode<T>* new_element = (CNode<T>*) allocator_traits<Allocator>::allocate(alloc, 1);
+        auto new_element = allocator_traits<Allocator>::allocate(alloc, 1);
         if (first == nullptr){
             first = new_element;
             last = first;
@@ -120,7 +118,7 @@ public:
         size++;
     }
 
-    void SetFirst(){
+    void SetFirst() {
         current = first;
     }
 
@@ -145,6 +143,7 @@ public:
         while(current != nullptr){
             auto tmp_ptr = current;
             Next();
+            allocator_traits<Allocator>::destroy(alloc, tmp_ptr);
             allocator_traits<Allocator>::deallocate(alloc, tmp_ptr, 1);
         }
     }
@@ -165,7 +164,7 @@ int main() {
         cout << it->first << " " << it->second << endl;
     }
 
-    cout << endl << "allocator with my_list" << endl;
+    cout << endl << "allocator with MyList" << endl;
     MyList<int, PoolAllocator<CNode<int>, 5>> my_list;
 
     for(int i=0; i<10; i++)
@@ -173,10 +172,21 @@ int main() {
 
     my_list.SetFirst();
     int size = my_list.Size();
-    for(int i=0; i<size; i++){
+    for(int i=0; i<size; i++) {
         cout << my_list.GetCurrentVal() << endl;
         my_list.Next();
     }
 
+    cout << endl << "std allocator with MyList" << endl;
+    MyList<int> my_list_2;
+    for(int i=10; i<20; i++)
+        my_list_2.Add(i);
+
+    my_list_2.SetFirst();
+    int size_2 = my_list_2.Size();
+    for(int i=0; i<size_2; i++) {
+        cout << my_list_2.GetCurrentVal() << endl;
+        my_list_2.Next();
+    }
     return 0;
 }
